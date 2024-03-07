@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>YOLOv8 Object Detection</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <style>
+        .html {
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        .waraper {
+            margin: 0 20px;
+            width: auto;
+        }
+
+        .header {
+            text-align: center;
+        }
+
+        .main {
+            display: flex;
+            justify-content: center;
+            border: 1px solid black;
+        }
+
+        .main-right {
+            width: 45%;
+            height: auto;
+            display: flex;
+            flex-direction: column;
+            /* border: 1px solid black; */
+        }
+
+        .main-right-head {
+            border-left: 1px solid black;
+            display: flex;
+            justify-content: center;
+            height: 41.2px;
+        }
+
+        .main-left {
+            width: 55%;
+            /* border: 1px solid black; */
+            display: flex;
+            flex-direction: column;
+
+        }
+
+        .main-left-head {
+            border-bottom: 1px solid black;
+            height: 41.2px;
+        }
+
+        .main-left-head h2 {
+            text-align: center;
+            margin: 0;
+            /* margin-top: 10px; */
+            line-height: 41.84px;
+        }
+
+        .main-left-body {
+            width: 100%;
+            height: 650px;
+        }
+
+        .main-left .title h3 {
+            text-align: center;
+        }
+
+        .output {
+            /* overflow: auto; */
+            /* border: 1px solid black; */
+            /* background: fixed url(./faculty-slider-placeholder.jpg);
+            border: 1px solid black; */
+            /* margin-top: 10px; */
+            width: 100%;
+            height: 650px;
+            /* width: 650px;
+            height: 650px; */
+        }
+
+        canvas {
+            border: 1px solid black;
+            background: url(./img/faculty-slider-placeholder.jpg);
+            width: 100%;
+            height: 100%;
+            /* width: 640px;
+            height: 640px; */
+
+            /* position: absolute; */
+            /* top: 50%; */
+            /* left: 50%; */
+            /* transform: translate(-50%, -50%); */
+        }
+
+        .main-right input {
+            display: block;
+            text-align: center;
+            padding: 10px 10px 10px 10px;
+
+        }
+
+        .footer {
+            width: 700px;
+        }
+
+        #imageContainer {
+            display: flex;
+            justify-content: space-between;
+        }
+
+
+        #imageContainer img {
+            height: 200px;
+            width: 200px;
+            display: block;
+        }
+
+        #imageContainer .box {
+            display: flex;
+            text-align: center;
+            /* align-items: space-around; */
+            flex-direction: column;
+            /* align-items: center; */
+        }
+
+        #imageContainer button {
+            padding: 10px 20px;
+            background-color: #5b5f63;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="waraper">
+        <div class="header">
+            <h1>Hệ thống nhận dạng côn trùng gây hại ở cây lúa</h1>
+        </div>
+        <div class="main">
+            <div class="main-left">
+                <div class="main-left-head">
+                    <h2>Output</h2>
+                </div>
+                <div class="main-left-body"></div>
+            </div>
+            <div class="main-right">
+                <div class="main-right-head">
+                    <input id="uploadInput" type="file" />
+                </div>
+                <div class="output">
+                    <canvas></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="footer">
+            <div class="title">
+                <h3>Ảnh mẫu</h3>
+            </div>
+            <div id="imageContainer">
+                <div class="box">
+                    <h3>Rầy lưng xanh</h3>
+                    <img src="./img/ray-lung-xanh-465.jpg" alt="Ảnh 1">
+                    <button onclick="downloadImage('./img/ray-lung-xanh-465.jpg')">Tải ảnh</button>
+                </div>
+                <div class="box">
+                    <h3>Rầy nâu</h3>
+                    <img src="./img/ray-nau-55.jpg" alt="Ảnh 2">
+                    <button onclick="downloadImage('./img/ray-nau-55.jpg')">Tải ảnh</button>
+                </div>
+                <div class="box">
+                    <h3>Sâu đục thân</h3>
+                    <img src="./img/sau-duc-than-80.jpg" alt="Ảnh 3">
+                    <button onclick="downloadImage('./img/sau-duc-than-80.jpg')">Tải ảnh</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+
+        function downloadImage(imageUrl) {
+            var link = document.createElement('a');
+            link.href = imageUrl;
+            link.download = '';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        const input = document.getElementById("uploadInput");
+        input.addEventListener("change", async (event) => {
+            const boxes = await detect_objects_on_image(event.target.files[0]);
+            draw_image_and_boxes(event.target.files[0], boxes);
+        })
+
+        /**
+         * Function draws the image from provided file
+         * and bounding boxes of detected objects on
+         * top of the image
+         * @param file Uploaded file object
+         * @param boxes Array of bounding boxes in format [[x1,y1,x2,y2,object_type,probability],...]
+         */
+        function create_table(kq, label) {
+            if (label == 'sau-duc-than') {
+                kq.innerHTML = "Đây là Sâu đục thân"
+            }
+        }
+
+        function draw_image_and_boxes(file, boxes) {
+            const img = new Image()
+            img.src = URL.createObjectURL(file);
+            img.onload = () => {
+                const canvas = document.querySelector("canvas");
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(img, 0, 0);
+                ctx.strokeStyle = "#00FF00";
+                ctx.lineWidth = 3;
+                ctx.font = "18px serif";
+                boxes.forEach(([x1, y1, x2, y2, label]) => {
+                    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                    ctx.fillStyle = "#00ff00";
+                    const width = ctx.measureText(label).width;
+                    ctx.fillRect(x1, y1, width + 10, 25);
+                    ctx.fillStyle = "#000000";
+                    ctx.fillText(label, x1, y1 + 18);
+                    // console.log(label);
+                    const kq = document.getElementsByClassName("main-left");
+                    create_table(kq, label);
+                });
+
+            }
+
+        }
+
+        /**
+         * Function receives an image, passes it through YOLOv8 neural network
+         * and returns an array of detected objects and their bounding boxes
+         * @param buf Input image body
+         * @returns Array of bounding boxes in format [[x1,y1,x2,y2,object_type,probability],..]
+         */
+        async function detect_objects_on_image(buf) {
+            const [input, img_width, img_height] = await prepare_input(buf);
+            const output = await run_model(input);
+            return process_output(output, img_width, img_height);
+        }
+
+        /**
+         * Function used to convert input image to tensor,
+         * required as an input to YOLOv8 object detection
+         * network.
+         * @param buf Content of uploaded file
+         * @returns Array of pixels
+         */
+        async function prepare_input(buf) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.src = URL.createObjectURL(buf);
+                img.onload = () => {
+                    const [img_width, img_height] = [img.width, img.height]
+                    const canvas = document.createElement("canvas");
+                    canvas.width = 640;
+                    canvas.height = 640;
+                    const context = canvas.getContext("2d");
+                    context.drawImage(img, 0, 0, 640, 640);
+                    const imgData = context.getImageData(0, 0, 640, 640);
+                    const pixels = imgData.data;
+
+                    const red = [], green = [], blue = [];
+                    for (let index = 0; index < pixels.length; index += 4) {
+                        red.push(pixels[index] / 255.0);
+                        green.push(pixels[index + 1] / 255.0);
+                        blue.push(pixels[index + 2] / 255.0);
+                    }
+                    const input = [...red, ...green, ...blue];
+                    resolve([input, img_width, img_height])
+                }
+            })
+        }
+
+        /**
+         * Function used to pass provided input tensor to YOLOv8 neural network and return result
+         * @param input Input pixels array
+         * @returns Raw output of neural network as a flat array of numbers
+         */
+        async function run_model(input) {
+            const model = await ort.InferenceSession.create("last.onnx");
+            input = new ort.Tensor(Float32Array.from(input), [1, 3, 640, 640]);
+            const outputs = await model.run({ images: input });
+            //   console.log(outputs["output0"].data);
+            return outputs["output0"].data;
+        }
+
+        /**
+         * Function used to convert RAW output from YOLOv8 to an array of detected objects.
+         * Each object contain the bounding box of this object, the type of object and the probability
+         * @param output Raw output of YOLOv8 network
+         * @param img_width Width of original image
+         * @param img_height Height of original image
+         * @returns Array of detected objects in a format [[x1,y1,x2,y2,object_type,probability],..]
+         */
+        function process_output(output, img_width, img_height) {
+            let boxes = [];
+            for (let index = 0; index < 8400; index++) {
+                const [class_id, prob] = [...Array(80).keys()]
+                    .map(col => [col, output[8400 * (col + 4) + index]])
+                    .reduce((accum, item) => item[1] > accum[1] ? item : accum, [0, 0]);
+                if (prob < 0.5) {
+                    continue;
+                }
+                const label = yolo_classes[class_id];
+                const xc = output[index];
+                const yc = output[8400 + index];
+                const w = output[2 * 8400 + index];
+                const h = output[3 * 8400 + index];
+                const x1 = (xc - w / 2) / 640 * img_width;
+                const y1 = (yc - h / 2) / 640 * img_height;
+                const x2 = (xc + w / 2) / 640 * img_width;
+                const y2 = (yc + h / 2) / 640 * img_height;
+                boxes.push([x1, y1, x2, y2, label, prob]);
+
+            }
+
+            boxes = boxes.sort((box1, box2) => box2[5] - box1[5])
+            const result = [];
+            while (boxes.length > 0) {
+                result.push(boxes[0]);
+                boxes = boxes.filter(box => iou(boxes[0], box) < 0.7);
+            }
+            return result;
+        }
+
+        /**
+         * Function calculates "Intersection-over-union" coefficient for specified two boxes
+         * https://pyimagesearch.com/2016/11/07/intersection-over-union-iou-for-object-detection/.
+         * @param box1 First box in format: [x1,y1,x2,y2,object_class,probability]
+         * @param box2 Second box in format: [x1,y1,x2,y2,object_class,probability]
+         * @returns Intersection over union ratio as a float number
+         */
+        function iou(box1, box2) {
+            return intersection(box1, box2) / union(box1, box2);
+        }
+
+        /**
+         * Function calculates union area of two boxes.
+         *     :param box1: First box in format [x1,y1,x2,y2,object_class,probability]
+         *     :param box2: Second box in format [x1,y1,x2,y2,object_class,probability]
+         *     :return: Area of the boxes union as a float number
+         * @param box1 First box in format [x1,y1,x2,y2,object_class,probability]
+         * @param box2 Second box in format [x1,y1,x2,y2,object_class,probability]
+         * @returns Area of the boxes union as a float number
+         */
+        function union(box1, box2) {
+            const [box1_x1, box1_y1, box1_x2, box1_y2] = box1;
+            const [box2_x1, box2_y1, box2_x2, box2_y2] = box2;
+            const box1_area = (box1_x2 - box1_x1) * (box1_y2 - box1_y1)
+            const box2_area = (box2_x2 - box2_x1) * (box2_y2 - box2_y1)
+            return box1_area + box2_area - intersection(box1, box2)
+        }
+
+        /**
+         * Function calculates intersection area of two boxes
+         * @param box1 First box in format [x1,y1,x2,y2,object_class,probability]
+         * @param box2 Second box in format [x1,y1,x2,y2,object_class,probability]
+         * @returns Area of intersection of the boxes as a float number
+         */
+        function intersection(box1, box2) {
+            const [box1_x1, box1_y1, box1_x2, box1_y2] = box1;
+            const [box2_x1, box2_y1, box2_x2, box2_y2] = box2;
+            const x1 = Math.max(box1_x1, box2_x1);
+            const y1 = Math.max(box1_y1, box2_y1);
+            const x2 = Math.min(box1_x2, box2_x2);
+            const y2 = Math.min(box1_y2, box2_y2);
+            return (x2 - x1) * (y2 - y1)
+        }
+
+        /**
+         * Array of YOLOv8 class labels
+         */
+        const yolo_classes = ['sau-duc-than', 'bo-xit-den', 'bu-lach', 'de-nhui', 'gay-lung-xanh', 'ray-nau', 'sau-cuon-la-truong-thanh'];
+
+    </script>
+</body>
+
+</html>
